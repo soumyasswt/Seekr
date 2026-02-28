@@ -42,7 +42,13 @@ HEADERS = {
 
 # ─── APP ──────────────────────────────────────────────────────────────────────
 app = FastAPI(title="Seekr", version="3.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://soumyasswt.github.io", "http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 state = {
     "local_index": {},
@@ -327,7 +333,7 @@ def search(query, source="all", page=1, per_page=10):
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
-@app.get("/")
+@app.get("/", methods=["GET", "HEAD"])
 async def root():
     for f in ["index.html", "static/index.html"]:
         if os.path.exists(f): return FileResponse(f)
