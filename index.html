@@ -1,0 +1,43 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mini Search Engine</title>
+<style>
+body { font-family: Arial; margin: 2rem; }
+input { width: 400px; padding: 0.5rem; }
+button { padding: 0.5rem 1rem; }
+.result { margin-top: 1rem; padding: 0.5rem; border-bottom: 1px solid #ccc; }
+.result a { text-decoration: none; color: blue; }
+</style>
+</head>
+<body>
+<h1>Mini Search Engine</h1>
+<input type="text" id="query" placeholder="Enter search terms">
+<button onclick="doSearch()">Search</button>
+<div id="results"></div>
+
+<script>
+async function doSearch() {
+    const q = document.getElementById('query').value;
+    const resDiv = document.getElementById('results');
+    resDiv.innerHTML = 'Searching...';
+    const response = await fetch(`http://127.0.0.1:8000/search?q=${encodeURIComponent(q)}`);
+    const data = await response.json();
+    if (data.results.length === 0) {
+        resDiv.innerHTML = 'No results found.';
+        return;
+    }
+    resDiv.innerHTML = '';
+    data.results.forEach(r => {
+        const div = document.createElement('div');
+        div.className = 'result';
+        div.innerHTML = `<a href="${r.url}" target="_blank">${r.title}</a><br>
+                         Matched: ${r.matched_tokens.join(', ')} | Top: ${r.top_token}`;
+        resDiv.appendChild(div);
+    });
+}
+</script>
+</body>
+</html>
