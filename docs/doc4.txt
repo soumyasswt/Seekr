@@ -1,9 +1,0 @@
-chess
-cricket
-movie
-town
-friends
-family
-happy
-sad
-engine

@@ -1,43 +1,1331 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Mini Search Engine</title>
-<style>
-body { font-family: Arial; margin: 2rem; }
-input { width: 400px; padding: 0.5rem; }
-button { padding: 0.5rem 1rem; }
-.result { margin-top: 1rem; padding: 0.5rem; border-bottom: 1px solid #ccc; }
-.result a { text-decoration: none; color: blue; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seekr</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    /* ── TOKENS ─────────────────────────────────────────────────────── */
+    :root {
+      --bg:        #0e0e10;
+      --bg-2:      #161618;
+      --bg-3:      #1e1e22;
+      --bg-4:      #28282e;
+      --border:    rgba(255,255,255,0.08);
+      --border-2:  rgba(255,255,255,0.14);
+      --text:      #f0f0f2;
+      --text-2:    #a8a8b4;
+      --text-3:    #6a6a7a;
+      --accent:    #7b6ef6;
+      --accent-2:  #5b8df6;
+      --teal:      #3dd6c8;
+      --red:       #f06292;
+      --glow:      rgba(123,110,246,0.18);
+      --sidebar-w: 72px;
+      --radius:    16px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── SIDEBAR ────────────────────────────────────────────────────── */
+    .sidebar {
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      width: var(--sidebar-w);
+      background: var(--bg-2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem 0;
+      z-index: 200;
+      gap: 0.25rem;
+    }
+
+    .sb-logo {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; font-weight: 700; color: white;
+      font-family: 'Instrument Serif', serif;
+      margin-bottom: 0.5rem;
+      cursor: pointer; flex-shrink: 0;
+      transition: opacity 0.15s, transform 0.12s;
+    }
+    .sb-logo:hover { opacity: 0.85; transform: scale(1.05); }
+
+    .sb-btn {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      border: none;
+      background: transparent;
+      color: var(--text-2);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      transition: background 0.15s, color 0.15s;
+    }
+    .sb-btn:hover { background: var(--bg-3); color: var(--text); }
+
+    .sb-spacer { flex: 1; }
+
+    /* ── MAIN WRAP ──────────────────────────────────────────────────── */
+    .main-wrap {
+      margin-left: var(--sidebar-w);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+
+    /* ── TOP BAR ────────────────────────────────────────────────────── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 0.75rem 1.5rem;
+      gap: 0.75rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .topbar-title {
+      font-weight: 600; font-size: 1rem; color: var(--text);
+      margin-right: auto; letter-spacing: -0.01em;
+      opacity: 0; transition: opacity 0.2s;
+    }
+    .topbar-title.show { opacity: 1; }
+
+    /* Login / Avatar button */
+    .login-btn {
+      background: var(--bg-3);
+      border: 1px solid var(--border-2);
+      border-radius: 999px;
+      padding: 0.4rem 1rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-2);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 0.4rem;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .login-btn:hover { background: var(--bg-4); border-color: var(--accent); color: var(--text); }
+
+    .avatar-btn {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 700; color: white;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.12s;
+      position: relative;
+    }
+    .avatar-btn:hover { opacity: 0.85; transform: scale(1.05); }
+
+    .avatar-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: var(--bg-3);
+      border: 1px solid var(--border-2);
+      border-radius: 14px;
+      padding: 0.5rem;
+      min-width: 180px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+      display: none;
+      z-index: 500;
+    }
+    .avatar-menu.open { display: block; }
+    .am-item {
+      padding: 0.6rem 0.8rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: var(--text-2);
+      cursor: pointer;
+      display: flex; align-items: center; gap: 0.5rem;
+      transition: background 0.12s, color 0.12s;
+    }
+    .am-item:hover { background: var(--bg-4); color: var(--text); }
+    .am-item.danger { color: #f06292; }
+    .am-item.danger:hover { background: rgba(240,98,146,0.1); }
+    .am-email { padding: 0.5rem 0.8rem 0.8rem; font-size: 0.75rem; color: var(--text-3); border-bottom: 1px solid var(--border); margin-bottom: 0.4rem; }
+
+    /* ── AUTH MODAL OVERLAY ─────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      animation: overlayIn 0.2s ease both;
+    }
+    .modal-overlay.open { display: flex; }
+    @keyframes overlayIn { from { opacity:0; } to { opacity:1; } }
+
+    /* Clay card */
+    .auth-card {
+      background: var(--bg-3);
+      border: 1px solid var(--border-2);
+      border-radius: 24px;
+      padding: 2rem 2rem 1.75rem;
+      width: 100%;
+      max-width: 380px;
+      position: relative;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.05),
+        0 24px 80px rgba(0,0,0,0.7),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+      animation: cardPop 0.3s cubic-bezier(.16,1,.3,1) both;
+    }
+    @keyframes cardPop {
+      from { opacity:0; transform: scale(0.92) translateY(12px); }
+      to   { opacity:1; transform: none; }
+    }
+
+    .auth-close {
+      position: absolute; top: 1rem; right: 1rem;
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: var(--bg-4);
+      color: var(--text-3);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem;
+      transition: background 0.15s, color 0.15s;
+    }
+    .auth-close:hover { background: rgba(240,98,146,0.15); color: var(--red); }
+
+    .auth-logo {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.6rem;
+      font-weight: 400;
+      font-style: italic;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2), var(--teal));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.2rem;
+    }
+
+    .auth-headline {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      margin-bottom: 0.35rem;
+    }
+    .auth-sub {
+      font-size: 0.83rem;
+      color: var(--text-3);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+
+    /* Input field */
+    .auth-field {
+      background: var(--bg-4);
+      border: 1px solid var(--border-2);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 0.95rem;
+      color: var(--text);
+      width: 100%;
+      outline: none;
+      caret-color: var(--accent);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 0.75rem;
+    }
+    .auth-field::placeholder { color: var(--text-3); }
+    .auth-field:focus {
+      border-color: rgba(123,110,246,0.5);
+      box-shadow: 0 0 0 3px rgba(123,110,246,0.12);
+    }
+
+    /* OTP boxes */
+    .otp-row {
+      display: flex; gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .otp-box {
+      flex: 1;
+      height: 52px;
+      background: var(--bg-4);
+      border: 1px solid var(--border-2);
+      border-radius: 12px;
+      text-align: center;
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: var(--text);
+      outline: none;
+      caret-color: var(--accent);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+    .otp-box:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(123,110,246,0.15);
+      background: var(--bg-3);
+    }
+    .otp-box.filled { border-color: rgba(123,110,246,0.4); }
+    .otp-box.error  { border-color: var(--red); background: rgba(240,98,146,0.06); }
+    .otp-box.success { border-color: var(--teal); background: rgba(61,214,200,0.06); }
+
+    /* Primary action button */
+    .auth-primary {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border: none;
+      border-radius: 12px;
+      padding: 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: white;
+      cursor: pointer;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: opacity 0.15s, transform 0.12s;
+      margin-bottom: 0.75rem;
+      display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    }
+    .auth-primary:hover { opacity: 0.9; transform: scale(1.01); }
+    .auth-primary:active { transform: scale(0.99); }
+    .auth-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    /* Guest button */
+    .auth-ghost {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--border-2);
+      border-radius: 12px;
+      padding: 0.7rem;
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: var(--text-3);
+      cursor: pointer;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .auth-ghost:hover { background: var(--bg-4); color: var(--text-2); border-color: var(--border-2); }
+
+    .auth-hint {
+      font-size: 0.77rem;
+      color: var(--text-3);
+      text-align: center;
+      margin-top: 0.4rem;
+      line-height: 1.5;
+    }
+    .auth-hint a { color: var(--accent); cursor: pointer; text-decoration: none; }
+    .auth-hint a:hover { text-decoration: underline; }
+
+    .auth-msg {
+      font-size: 0.82rem;
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+      margin-bottom: 0.75rem;
+      display: none;
+    }
+    .auth-msg.error   { background: rgba(240,98,146,0.1); border: 1px solid rgba(240,98,146,0.25); color: #f48fb1; display: block; }
+    .auth-msg.success { background: rgba(61,214,200,0.08); border: 1px solid rgba(61,214,200,0.2); color: var(--teal); display: block; }
+
+    /* Loading spinner in button */
+    .spin {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Success checkmark */
+    .check-anim {
+      font-size: 2.5rem;
+      text-align: center;
+      margin: 0.5rem 0 1rem;
+      animation: popIn 0.4s cubic-bezier(.16,1,.3,1) both;
+    }
+    @keyframes popIn { from { opacity:0; transform: scale(0.5); } to { opacity:1; transform: scale(1); } }
+
+    /* ── HOMEPAGE ───────────────────────────────────────────────────── */
+    #homepage {
+      flex: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 3rem 1.5rem 5rem;
+      position: relative;
+    }
+    #homepage::before {
+      content: '';
+      position: absolute;
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(123,110,246,0.06) 0%, rgba(93,141,246,0.04) 40%, transparent 70%);
+      top: 50%; left: 50%;
+      transform: translate(-50%, -58%);
+      pointer-events: none;
+    }
+
+    .hp-inner {
+      position: relative; width: 100%; max-width: 720px; text-align: center;
+    }
+
+    .greeting {
+      display: flex; align-items: center; justify-content: center;
+      gap: 0.5rem; margin-bottom: 0.5rem;
+      animation: fadeUp 0.6s cubic-bezier(.16,1,.3,1) both;
+    }
+    .greeting-spark { font-size: 1.4rem; }
+    .greeting-text {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.4rem; font-style: italic;
+      color: var(--text-2); font-weight: 400;
+    }
+
+    .hp-headline {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(2.2rem, 5vw, 3.2rem);
+      font-weight: 400; line-height: 1.15;
+      letter-spacing: -0.02em; color: var(--text);
+      margin-bottom: 2rem;
+      animation: fadeUp 0.65s 0.06s cubic-bezier(.16,1,.3,1) both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity:0; transform: translateY(16px); }
+      to   { opacity:1; transform: none; }
+    }
+
+    /* ── SEARCH BOX ─────────────────────────────────────────────────── */
+    .search-outer {
+      position: relative; width: 100%;
+      animation: fadeUp 0.7s 0.12s cubic-bezier(.16,1,.3,1) both;
+    }
+
+    .search-box {
+      background: var(--bg-3);
+      border: 1px solid var(--border-2);
+      border-radius: 24px;
+      overflow: hidden;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-box:focus-within {
+      border-color: rgba(123,110,246,0.5);
+      box-shadow: 0 0 0 3px rgba(123,110,246,0.12);
+    }
+
+    .search-input-row {
+      display: flex; align-items: center;
+      padding: 0.9rem 1rem 0.6rem 1.4rem; gap: 0.5rem;
+    }
+
+    .search-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 1rem; color: var(--text);
+      caret-color: var(--accent); min-width: 0;
+    }
+    .search-input::placeholder { color: var(--text-3); }
+
+    .search-toolbar {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 0.4rem 0.8rem 0.75rem 1.2rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .toolbar-left { display: flex; align-items: center; gap: 0.25rem; }
+
+    .tb-btn {
+      background: transparent; border: none;
+      color: var(--text-3); cursor: pointer;
+      padding: 0.4rem 0.6rem; border-radius: 8px;
+      font-size: 0.82rem; font-weight: 500;
+      display: flex; align-items: center; gap: 0.3rem;
+      transition: background 0.15s, color 0.15s;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .tb-btn:hover { background: var(--bg-4); color: var(--text-2); }
+
+    .tb-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--teal); flex-shrink: 0;
+    }
+
+    .search-go {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border: none; border-radius: 10px;
+      width: 38px; height: 38px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 1rem;
+      transition: opacity 0.15s, transform 0.12s;
+    }
+    .search-go:hover { opacity: 0.85; transform: scale(1.05); }
+
+    /* Autocomplete */
+    #autocomplete, #rp-autocomplete {
+      position: absolute;
+      top: calc(100% + 6px); left: 0; right: 0;
+      background: var(--bg-3);
+      border: 1px solid var(--border-2);
+      border-radius: 16px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+      z-index: 300; overflow: hidden; display: none;
+    }
+    #autocomplete.open, #rp-autocomplete.open { display: block; }
+    .ac-item {
+      padding: 0.7rem 1.2rem; font-size: 0.92rem;
+      color: var(--text-2); cursor: pointer;
+      display: flex; align-items: center; gap: 0.7rem;
+      transition: background 0.12s;
+    }
+    .ac-item:hover, .ac-item.focused { background: var(--bg-4); color: var(--text); }
+    .ac-ico { color: var(--text-3); font-size: 0.85rem; }
+
+    /* ── CHIPS ──────────────────────────────────────────────────────── */
+    .chips {
+      display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 0.5rem; margin-top: 1.5rem;
+      animation: fadeUp 0.75s 0.2s cubic-bezier(.16,1,.3,1) both;
+    }
+    .chip {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 999px; padding: 0.5rem 1rem;
+      font-size: 0.85rem; font-weight: 500; color: var(--text-2);
+      cursor: pointer; display: flex; align-items: center; gap: 0.4rem;
+      transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.12s;
+      user-select: none;
+    }
+    .chip:hover { background: var(--bg-4); border-color: var(--border-2); color: var(--text); transform: translateY(-1px); }
+
+    /* ── RESULTS PAGE ───────────────────────────────────────────────── */
+    #resultspage { display: none; flex: 1; flex-direction: column; }
+    #resultspage.show { display: flex; }
+
+    .rp-topbar {
+      display: flex; align-items: center; padding: 0.65rem 1.5rem;
+      gap: 1rem; background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100; flex-wrap: wrap;
+    }
+
+    .rp-search-wrap {
+      flex: 1; max-width: 640px; min-width: 200px; position: relative;
+    }
+    .rp-search-box {
+      background: var(--bg-3); border: 1px solid var(--border-2);
+      border-radius: 999px; display: flex; align-items: center;
+      padding: 0.45rem 0.45rem 0.45rem 1.2rem; gap: 0.5rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .rp-search-box:focus-within {
+      border-color: rgba(123,110,246,0.5);
+      box-shadow: 0 0 0 3px rgba(123,110,246,0.12);
+    }
+    .rp-search-box input {
+      flex: 1; background: transparent; border: none; outline: none;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 0.92rem; color: var(--text); caret-color: var(--accent); min-width: 0;
+    }
+    .rp-search-box input::placeholder { color: var(--text-3); }
+    .rp-go {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      border: none; border-radius: 999px;
+      padding: 0.45rem 1rem; font-size: 0.85rem;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 600; color: white; cursor: pointer;
+      transition: opacity 0.15s; white-space: nowrap;
+    }
+    .rp-go:hover { opacity: 0.85; }
+
+    .rp-tabs { display: flex; gap: 0.25rem; }
+    .rp-tab {
+      padding: 0.4rem 0.9rem; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 500; cursor: pointer;
+      border: 1px solid transparent; color: var(--text-3);
+      background: transparent; transition: all 0.15s; user-select: none;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+    .rp-tab:hover { color: var(--text-2); background: var(--bg-3); }
+    .rp-tab.active { color: var(--accent); background: rgba(123,110,246,0.12); border-color: rgba(123,110,246,0.25); }
+
+    .rp-body { flex: 1; max-width: 800px; width: 100%; margin: 0 auto; padding: 1.25rem 1.5rem 5rem; }
+
+    .meta-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.1rem; font-size: 0.8rem; color: var(--text-3);
+      flex-wrap: wrap; gap: 0.4rem;
+    }
+    .live-badge {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      font-size: 0.75rem; font-weight: 600; color: var(--teal);
+      background: rgba(61,214,200,0.1); border: 1px solid rgba(61,214,200,0.2);
+      border-radius: 999px; padding: 0.2rem 0.6rem;
+    }
+    .live-pulse {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--teal); animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }
+
+    .correction-box {
+      background: rgba(123,110,246,0.08); border: 1px solid rgba(123,110,246,0.2);
+      border-radius: 12px; padding: 0.65rem 1rem;
+      font-size: 0.88rem; color: var(--text-2); margin-bottom: 1rem;
+    }
+    .correction-box a { color: var(--accent); cursor: pointer; }
+
+    .r-card {
+      padding: 1.1rem 1.25rem 1rem; background: var(--bg-2);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      margin-bottom: 0.75rem;
+      transition: border-color 0.18s, background 0.18s, transform 0.18s;
+      animation: cardIn 0.3s cubic-bezier(.16,1,.3,1) both;
+    }
+    .r-card:hover { background: var(--bg-3); border-color: var(--border-2); transform: translateY(-1px); }
+    @keyframes cardIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+    .r-src-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .r-favicon {
+      width: 16px; height: 16px; border-radius: 4px;
+      background: var(--bg-4); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 0.65rem;
+    }
+    .r-domain { font-size: 0.77rem; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
+    .r-src-badge {
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text-3);
+      background: var(--bg-4); border-radius: 4px; padding: 0.1rem 0.4rem; margin-left: auto;
+    }
+    .r-src-badge.web   { color: var(--teal);    background: rgba(61,214,200,0.1); }
+    .r-src-badge.local { color: var(--accent-2); background: rgba(93,141,246,0.1); }
+
+    .r-title {
+      font-size: 1.05rem; font-weight: 600; color: #8ab4f8;
+      text-decoration: none; line-height: 1.4; display: block;
+      margin-bottom: 0.4rem; transition: color 0.15s;
+    }
+    .r-title:hover { color: #aecbfa; text-decoration: underline; }
+
+    .r-snippet { font-size: 0.875rem; color: var(--text-2); line-height: 1.7; }
+    .r-snippet mark { background: rgba(123,110,246,0.25); color: var(--text); border-radius: 3px; padding: 0 2px; }
+
+    .r-tags { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; }
+    .r-tag {
+      font-size: 0.7rem; font-weight: 500; padding: 0.15rem 0.5rem;
+      border-radius: 6px; background: var(--bg-4); color: var(--text-3);
+      border: 1px solid var(--border);
+    }
+    .r-tag.hit { color: var(--teal); background: rgba(61,214,200,0.07); border-color: rgba(61,214,200,0.15); }
+
+    .no-results { text-align: center; padding: 5rem 2rem; color: var(--text-3); }
+    .no-results .nr-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+    .no-results h3 { font-size: 1.2rem; color: var(--text-2); margin-bottom: 0.5rem; font-family: 'Instrument Serif', serif; font-style: italic; }
+
+    .skel-card {
+      padding: 1.1rem 1.25rem; background: var(--bg-2);
+      border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 0.75rem;
+    }
+    .skel {
+      background: linear-gradient(90deg, var(--bg-3) 25%, var(--bg-4) 50%, var(--bg-3) 75%);
+      background-size: 200% 100%; border-radius: 6px; animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { from{background-position:200% center} to{background-position:-200% center} }
+    .sk-url   { height:10px; width:30%; margin-bottom:.6rem; }
+    .sk-title { height:16px; width:65%; margin-bottom:.6rem; }
+    .sk-line  { height:11px; margin-bottom:.35rem; }
+    .sk-line.s { width:80%; }
+
+    .pagination { display:flex; justify-content:center; align-items:center; gap:.5rem; margin-top:2rem; }
+    .pg-btn {
+      padding:.5rem 1rem; border-radius:10px; border:1px solid var(--border-2);
+      background:var(--bg-3); color:var(--text-2);
+      font-family:'Plus Jakarta Sans',sans-serif; font-size:.85rem;
+      cursor:pointer; transition:all 0.15s;
+    }
+    .pg-btn:hover  { border-color:var(--accent); color:var(--accent); }
+    .pg-btn.active { background:var(--accent); color:white; border-color:var(--accent); }
+    .pg-btn:disabled { opacity:.3; cursor:default; }
+
+    @media (max-width:640px) {
+      :root { --sidebar-w:0px; }
+      .sidebar { display:none; }
+      .rp-tabs { display:none; }
+      .hp-headline { font-size:2rem; }
+      .rp-body { padding:1rem 1rem 4rem; }
+    }
+  </style>
 </head>
 <body>
-<h1>Mini Search Engine</h1>
-<input type="text" id="query" placeholder="Enter search terms">
-<button onclick="doSearch()">Search</button>
-<div id="results"></div>
+
+<!-- ══ SIDEBAR ══ -->
+<nav class="sidebar">
+  <div class="sb-logo" onclick="goHome()" title="Seekr">S</div>
+  <button class="sb-btn" title="New search" onclick="goHome()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <button class="sb-btn" title="History">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+  </button>
+  <button class="sb-btn" title="Bookmarks">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+  </button>
+  <div class="sb-spacer"></div>
+  <button class="sb-btn" title="Settings">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</nav>
+
+<!-- ══ MAIN WRAP ══ -->
+<div class="main-wrap">
+
+  <!-- Top bar -->
+  <div class="topbar" id="topbar">
+    <span class="topbar-title" id="topbar-title">Seekr</span>
+    <!-- Auth button: changes between Login / Avatar -->
+    <div id="auth-btn-wrap" style="position:relative">
+      <button class="login-btn" id="login-btn" onclick="openModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Login
+      </button>
+      <div class="avatar-btn" id="avatar-btn" style="display:none" onclick="toggleAvatarMenu()">
+        <span id="avatar-initial">S</span>
+      </div>
+      <div class="avatar-menu" id="avatar-menu">
+        <div class="am-email" id="am-email">user@email.com</div>
+        <div class="am-item"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> My profile</div>
+        <div class="am-item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l-.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings
+        </div>
+        <div class="am-item danger" onclick="logout()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sign out
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HOMEPAGE ══ -->
+  <div id="homepage">
+    <div class="hp-inner">
+      <div class="greeting">
+        <span class="greeting-spark" id="greeting-spark">✦</span>
+        <span class="greeting-text" id="greeting-text">Loading vibe…</span>
+      </div>
+      <h1 class="hp-headline" id="hp-headline">Where should we start?</h1>
+
+      <div class="search-outer">
+        <div class="search-box">
+          <div class="search-input-row">
+            <input class="search-input" id="hp-input" placeholder="Search anything…" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="search-toolbar">
+            <div class="toolbar-left">
+              <button class="tb-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Attach
+              </button>
+              <button class="tb-btn">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                Tools <span class="tb-dot"></span>
+              </button>
+            </div>
+            <button class="search-go" onclick="doSearch()" title="Search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="autocomplete" role="listbox"></div>
+      </div>
+
+      <div class="chips">
+        <span class="chip" onclick="chipSearch('latest tech news')"><span>📰</span> Latest tech news</span>
+        <span class="chip" onclick="chipSearch('how to learn programming')"><span>💻</span> Learn programming</span>
+        <span class="chip" onclick="chipSearch('best movies 2025')"><span>🎬</span> Best movies 2025</span>
+        <span class="chip" onclick="chipSearch('healthy recipes')"><span>🥗</span> Healthy recipes</span>
+        <span class="chip" onclick="chipSearch('travel destinations india')"><span>✈️</span> Travel destinations</span>
+        <span class="chip" onclick="chipSearch('cricket score today')"><span>🏏</span> Cricket today</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ RESULTS PAGE ══ -->
+  <div id="resultspage">
+    <div class="rp-topbar">
+      <div class="rp-search-wrap">
+        <div class="rp-search-box">
+          <input id="rp-input" placeholder="Search…" autocomplete="off" spellcheck="false" />
+          <button class="rp-go" onclick="doSearch()">Search</button>
+        </div>
+        <div id="rp-autocomplete" role="listbox"></div>
+      </div>
+      <div class="rp-tabs" id="rp-tabs">
+        <span class="rp-tab active" data-src="all">All</span>
+        <span class="rp-tab" data-src="web">🌐 Web</span>
+        <span class="rp-tab" data-src="local">📄 Docs</span>
+      </div>
+    </div>
+    <div class="rp-body">
+      <div id="meta-row" class="meta-row"></div>
+      <div id="correction-box"></div>
+      <div id="results-container"></div>
+      <div id="pagination" class="pagination"></div>
+    </div>
+  </div>
+
+</div><!-- end .main-wrap -->
+
+<!-- ══ AUTH MODAL ══ -->
+<div class="modal-overlay" id="modal-overlay" onclick="overlayClick(event)">
+  <div class="auth-card" id="auth-card">
+    <button class="auth-close" onclick="closeModal()">✕</button>
+
+    <!-- STEP 1: Email -->
+    <div id="step-email">
+      <div class="auth-logo">Seekr</div>
+      <div class="auth-headline">Welcome back 👋</div>
+      <div class="auth-sub">Enter your email and we'll send you a 6-digit code. No password needed.</div>
+      <div class="auth-msg" id="email-msg"></div>
+      <input class="auth-field" id="email-input" type="email" placeholder="you@example.com" />
+      <button class="auth-primary" id="email-btn" onclick="sendOTP()">
+        <span class="spin" id="email-spin"></span>
+        <span id="email-btn-text">Send verification code →</span>
+      </button>
+      <button class="auth-ghost" onclick="continueAsGuest()">Continue as guest</button>
+      <p class="auth-hint">We'll send a one-time code. No spam, ever.</p>
+    </div>
+
+    <!-- STEP 2: OTP -->
+    <div id="step-otp" style="display:none">
+      <div class="auth-logo">Seekr</div>
+      <div class="auth-headline">Check your inbox ✉️</div>
+      <div class="auth-sub" id="otp-sub">We sent a 6-digit code to <strong id="otp-email-display"></strong></div>
+      <div class="auth-msg" id="otp-msg"></div>
+      <div class="otp-row" id="otp-row">
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]" />
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]" />
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]" />
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]" />
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]" />
+        <input class="otp-box" maxlength="1" type="text" inputmode="numeric" pattern="[0-9]" />
+      </div>
+      <button class="auth-primary" id="otp-btn" onclick="verifyOTP()" disabled>
+        <span class="spin" id="otp-spin"></span>
+        <span id="otp-btn-text">Verify code</span>
+      </button>
+      <p class="auth-hint">Wrong email? <a onclick="backToEmail()">Go back</a> &nbsp;·&nbsp; <a onclick="resendOTP()">Resend code</a></p>
+    </div>
+
+    <!-- STEP 3: Success -->
+    <div id="step-success" style="display:none;text-align:center">
+      <div class="check-anim">🎉</div>
+      <div class="auth-headline">You're in!</div>
+      <div class="auth-sub" style="margin-bottom:1.25rem">Signed in as <strong id="success-email"></strong></div>
+      <button class="auth-primary" onclick="closeModal()">Start searching →</button>
+    </div>
+
+  </div>
+</div>
 
 <script>
-async function doSearch() {
-    const q = document.getElementById('query').value;
-    const resDiv = document.getElementById('results');
-    resDiv.innerHTML = 'Searching...';
-    const response = await fetch(`http://127.0.0.1:8000/search?q=${encodeURIComponent(q)}`);
-    const data = await response.json();
-    if (data.results.length === 0) {
-        resDiv.innerHTML = 'No results found.';
-        return;
+  /* ── CONFIG ──────────────────────────────────────────────────────── */
+  const API = "http://127.0.0.1:8000";
+
+  /* ── SEARCH STATE ────────────────────────────────────────────────── */
+  const S = {
+    query:"", source:"all", page:1, totalPages:1,
+    perPage:10, acTimer:null, acFocus:-1, acItems:[]
+  };
+
+  /* ── AUTH STATE ──────────────────────────────────────────────────── */
+  const auth = {
+    loggedIn: false,
+    email: "",
+    name: "",
+    token: "",
+  };
+
+  // Restore from sessionStorage
+  try {
+    const saved = sessionStorage.getItem("seekr_auth");
+    if (saved) {
+      Object.assign(auth, JSON.parse(saved));
+      if (auth.loggedIn) applyLoggedIn(auth.name, auth.email, false);
     }
-    resDiv.innerHTML = '';
-    data.results.forEach(r => {
-        const div = document.createElement('div');
-        div.className = 'result';
-        div.innerHTML = `<a href="${r.url}" target="_blank">${r.title}</a><br>
-                         Matched: ${r.matched_tokens.join(', ')} | Top: ${r.top_token}`;
-        resDiv.appendChild(div);
+  } catch {}
+
+  /* ── FUN GREETINGS ───────────────────────────────────────────────── */
+  const GREETINGS = [
+    { spark:"🔥", text:"Ready to break the internet?",      headline:"What are we hunting today?" },
+    { spark:"🚀", text:"Curiosity didn't kill the cat —",   headline:"It found the answer first." },
+    { spark:"🌌", text:"The universe is 93 billion ly wide.", headline:"Start with one search." },
+    { spark:"⚡", text:"You've got questions.",             headline:"Seekr's got the answers." },
+    { spark:"🎯", text:"Precision loaded.",                  headline:"What's on your mind?" },
+    { spark:"🧠", text:"Neurons firing?",                   headline:"Let's feed that brain." },
+    { spark:"🪄", text:"No wand required.",                 headline:"Just type your wish." },
+    { spark:"🐇", text:"Found a rabbit hole?",              headline:"Let's go deeper." },
+    { spark:"☕", text:"Coffee's hot.",                     headline:"Ideas are hotter." },
+    { spark:"🎲", text:"Feeling lucky?",                   headline:"Search and find out." },
+    { spark:"🌊", text:"Dive in.",                         headline:"The web is your ocean." },
+    { spark:"🦅", text:"Eyes sharp.",                       headline:"Let's find what you need." },
+  ];
+
+  (function setGreeting() {
+    const g = GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
+    // Also factor in time for a mixed vibe occasionally
+    const h = new Date().getHours();
+    if (Math.random() > 0.4) {
+      // Use fun greeting
+      document.getElementById("greeting-spark").textContent = g.spark;
+      document.getElementById("greeting-text").textContent  = g.text;
+      document.getElementById("hp-headline").textContent    = g.headline;
+    } else {
+      // Use time-based + fun headline
+      const times = ["Night owl? 🦉","Rise and grind ☀️","Afternoon explorer 🌤","Evening scholar 🌙"];
+      const ti = h < 6 ? 0 : h < 12 ? 1 : h < 17 ? 2 : 3;
+      document.getElementById("greeting-spark").textContent = g.spark;
+      document.getElementById("greeting-text").textContent  = times[ti];
+      document.getElementById("hp-headline").textContent    = g.headline;
+    }
+  })();
+
+  /* ── AVATAR MENU ─────────────────────────────────────────────────── */
+  function toggleAvatarMenu() {
+    document.getElementById("avatar-menu").classList.toggle("open");
+  }
+  document.addEventListener("click", e => {
+    if (!e.target.closest("#auth-btn-wrap")) {
+      document.getElementById("avatar-menu").classList.remove("open");
+    }
+  });
+
+  /* ── FILTERS ─────────────────────────────────────────────────────── */
+  document.querySelectorAll(".rp-tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".rp-tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      S.source = tab.dataset.src;
+      if (S.query) { S.page = 1; runSearch(); }
     });
-}
+  });
+
+  /* ── INPUTS ──────────────────────────────────────────────────────── */
+  function syncInputs(v) {
+    document.getElementById("hp-input").value = v;
+    document.getElementById("rp-input").value = v;
+  }
+
+  ["hp-input","rp-input"].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener("keydown", e => {
+      if (e.key==="Enter")    { doSearch(); closeAC(); }
+      if (e.key==="Escape")   { closeAC(); }
+      if (e.key==="ArrowDown"){ moveAC(1);  e.preventDefault(); }
+      if (e.key==="ArrowUp")  { moveAC(-1); e.preventDefault(); }
+    });
+    el.addEventListener("input", e => {
+      syncInputs(e.target.value);
+      scheduleAC(e.target.value);
+    });
+  });
+
+  /* ── AUTOCOMPLETE ────────────────────────────────────────────────── */
+  function scheduleAC(val) {
+    clearTimeout(S.acTimer);
+    const word = val.trim().split(/\s+/).pop();
+    if (!word || word.length < 2) { closeAC(); return; }
+    S.acTimer = setTimeout(() => fetchAC(word), 240);
+  }
+
+  async function fetchAC(prefix) {
+    try {
+      const r = await fetch(`${API}/suggest?q=${encodeURIComponent(prefix)}`);
+      renderAC((await r.json()).suggestions || []);
+    } catch { closeAC(); }
+  }
+
+  function renderAC(items) {
+    S.acItems = items; S.acFocus = -1;
+    const onRp = document.getElementById("resultspage").classList.contains("show");
+    const active = document.getElementById(onRp ? "rp-autocomplete" : "autocomplete");
+    const other  = document.getElementById(onRp ? "autocomplete" : "rp-autocomplete");
+    other.innerHTML=""; other.classList.remove("open");
+    if (!items.length) { active.innerHTML=""; active.classList.remove("open"); return; }
+    active.innerHTML = items.map((s,i) =>
+      `<div class="ac-item" onclick="selectAC('${esc(s)}')"><span class="ac-ico">⌕</span>${esc(s)}</div>`
+    ).join("");
+    active.classList.add("open");
+  }
+
+  function selectAC(word) {
+    const id = document.getElementById("resultspage").classList.contains("show") ? "rp-input" : "hp-input";
+    const el = document.getElementById(id);
+    const parts = el.value.split(/\s+/);
+    parts[parts.length-1] = word;
+    syncInputs(parts.join(" "));
+    closeAC(); doSearch();
+  }
+
+  function moveAC(dir) {
+    S.acFocus = Math.max(-1, Math.min(S.acItems.length-1, S.acFocus+dir));
+    document.querySelectorAll(".ac-item").forEach((el,i) => el.classList.toggle("focused", i===S.acFocus));
+    if (S.acFocus >= 0) syncInputs(S.acItems[S.acFocus]);
+  }
+
+  function closeAC() {
+    document.getElementById("autocomplete").classList.remove("open");
+    document.getElementById("rp-autocomplete").classList.remove("open");
+  }
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".search-outer") && !e.target.closest(".rp-search-wrap")) closeAC();
+  });
+
+  /* ── SEARCH ──────────────────────────────────────────────────────── */
+  function chipSearch(q) { syncInputs(q); S.query=q; S.page=1; showResults(); }
+  function doSearch() {
+    const onRp = document.getElementById("resultspage").classList.contains("show");
+    const q = document.getElementById(onRp ? "rp-input" : "hp-input").value.trim();
+    if (!q) return;
+    S.query=q; S.page=1; syncInputs(q); showResults();
+  }
+
+  async function runSearch() {
+    renderSkeleton();
+    const params = new URLSearchParams({q:S.query, source:S.source, page:S.page, per_page:S.perPage});
+    try {
+      const r = await fetch(`${API}/search?${params}`);
+      if (!r.ok) throw r;
+      renderResults(await r.json());
+    } catch {
+      document.getElementById("results-container").innerHTML =
+        `<div class="no-results"><div class="nr-icon">⚡</div>
+         <h3>Backend not connected</h3>
+         <p style="font-size:.85rem">Run <code style="background:var(--bg-4);padding:2px 6px;border-radius:6px">python backend.py</code></p></div>`;
+      document.getElementById("meta-row").innerHTML = "";
+      document.getElementById("pagination").innerHTML = "";
+    }
+  }
+
+  function renderResults(data) {
+    const corrBox = document.getElementById("correction-box");
+    corrBox.innerHTML = (data.corrected && data.corrected !== data.original_query)
+      ? `<div class="correction-box">Showing results for <strong>${esc(data.corrected)}</strong> — <a onclick="searchExact('${esc(data.original_query)}')">search original</a></div>`
+      : "";
+
+    document.getElementById("meta-row").innerHTML = `
+      <span>${data.results.length} results · ${data.elapsed}s</span>
+      ${S.source!=='local'?'<span class="live-badge"><span class="live-pulse"></span>Live</span>':''}`;
+
+    if (!data.results.length) {
+      document.getElementById("results-container").innerHTML =
+        `<div class="no-results"><div class="nr-icon">◌</div>
+         <h3>Nothing found for "${esc(S.query)}"</h3>
+         <p style="font-size:.85rem">Try different keywords or check your connection.</p></div>`;
+      document.getElementById("pagination").innerHTML = "";
+      return;
+    }
+
+    document.getElementById("results-container").innerHTML = data.results.map((r,i) => {
+      const isWeb = (r.source||"local")==="web";
+      let domain = r.display_url || r.url || "";
+      try { if (isWeb) domain = new URL(r.url).hostname; } catch {}
+      const initial = domain.replace("www.","")[0]?.toUpperCase() || "?";
+      if (domain.length > 60) domain = domain.substring(0,60)+"…";
+      return `
+        <div class="r-card" style="animation-delay:${i*.035}s">
+          <div class="r-src-row">
+            <div class="r-favicon">${initial}</div>
+            <span class="r-domain">${esc(domain)}</span>
+            <span class="r-src-badge ${r.source||'local'}">${isWeb?"Web":"Doc"}</span>
+          </div>
+          <a class="r-title" href="${isWeb?r.url:'#'}" ${isWeb?'target="_blank" rel="noopener"':''}>
+            ${esc(r.title||domain)}
+          </a>
+          <div class="r-snippet">${r.snippet||'<span style="color:var(--text-3)">No description available.</span>'}</div>
+          ${(r.matched_tokens||[]).length?`<div class="r-tags">${(r.matched_tokens||[]).slice(0,4).map(t=>`<span class="r-tag hit">${esc(t)}</span>`).join("")}</div>`:""}
+        </div>`;
+    }).join("");
+
+    S.source==="local" ? renderPageNums(Math.ceil(data.total/S.perPage)) : renderPrevNext();
+  }
+
+  function renderSkeleton() {
+    document.getElementById("results-container").innerHTML =
+      Array.from({length:5},()=>`<div class="skel-card"><div class="skel sk-url"></div><div class="skel sk-title"></div><div class="skel sk-line"></div><div class="skel sk-line s"></div></div>`).join("");
+    document.getElementById("meta-row").innerHTML = "";
+    document.getElementById("correction-box").innerHTML = "";
+    document.getElementById("pagination").innerHTML = "";
+  }
+
+  function renderPrevNext() {
+    document.getElementById("pagination").innerHTML = `
+      <button class="pg-btn" onclick="goPage(${S.page-1})" ${S.page===1?"disabled":""}>← Prev</button>
+      <span style="padding:.5rem .8rem;font-size:.8rem;color:var(--text-3)">Page ${S.page}</span>
+      <button class="pg-btn" onclick="goPage(${S.page+1})">Next →</button>`;
+  }
+
+  function renderPageNums(total) {
+    S.totalPages = total;
+    if (total <= 1) { document.getElementById("pagination").innerHTML=""; return; }
+    const lo=Math.max(1,S.page-2), hi=Math.min(total,lo+4);
+    let h = `<button class="pg-btn" onclick="goPage(${S.page-1})" ${S.page===1?"disabled":""}>← Prev</button>`;
+    for (let i=lo;i<=hi;i++) h+=`<button class="pg-btn ${i===S.page?"active":""}" onclick="goPage(${i})">${i}</button>`;
+    h+=`<button class="pg-btn" onclick="goPage(${S.page+1})" ${S.page===total?"disabled":""}>Next →</button>`;
+    document.getElementById("pagination").innerHTML = h;
+  }
+
+  function goPage(p) {
+    if (p<1) return;
+    if (S.source==="local" && p>S.totalPages) return;
+    S.page=p; runSearch(); window.scrollTo({top:0,behavior:"smooth"});
+  }
+
+  function searchExact(q) { S.query=q; syncInputs(q); S.page=1; runSearch(); }
+
+  function showResults() {
+    document.getElementById("homepage").style.display="none";
+    const rp = document.getElementById("resultspage");
+    rp.style.display="flex"; rp.classList.add("show");
+    document.getElementById("topbar-title").classList.add("show");
+    document.title=`${S.query} — Seekr`;
+    runSearch();
+  }
+
+  function goHome() {
+    const rp = document.getElementById("resultspage");
+    rp.style.display="none"; rp.classList.remove("show");
+    document.getElementById("homepage").style.display="";
+    document.getElementById("topbar-title").classList.remove("show");
+    document.getElementById("hp-input").focus();
+    document.title="Seekr";
+  }
+
+  /* ── AUTH MODAL ──────────────────────────────────────────────────── */
+  function openModal() {
+    document.getElementById("modal-overlay").classList.add("open");
+    setTimeout(() => document.getElementById("email-input").focus(), 100);
+  }
+
+  function closeModal() {
+    document.getElementById("modal-overlay").classList.remove("open");
+    // Reset to step 1 if not logged in
+    if (!auth.loggedIn) {
+      showStep("email");
+      document.getElementById("email-msg").className = "auth-msg";
+      document.getElementById("email-input").value = "";
+    }
+  }
+
+  function overlayClick(e) {
+    if (e.target === document.getElementById("modal-overlay")) closeModal();
+  }
+
+  function showStep(step) {
+    ["email","otp","success"].forEach(s => {
+      document.getElementById(`step-${s}`).style.display = s===step ? "" : "none";
+    });
+  }
+
+  // ── Send OTP ──
+  async function sendOTP() {
+    const email = document.getElementById("email-input").value.trim();
+    const msg   = document.getElementById("email-msg");
+    if (!email || !email.includes("@")) {
+      setMsg(msg, "error", "Please enter a valid email address.");
+      return;
+    }
+    setLoading("email", true);
+    try {
+      const r = await fetch(`${API}/auth/send-otp`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({email})
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.detail || "Failed to send OTP");
+      document.getElementById("otp-email-display").textContent = email;
+      showStep("otp");
+      clearOTP();
+      document.querySelector(".otp-box").focus();
+    } catch (e) {
+      setMsg(msg, "error", e.message);
+    }
+    setLoading("email", false);
+  }
+
+  // ── OTP box keyboard handling ──
+  document.getElementById("email-input").addEventListener("keydown", e => {
+    if (e.key === "Enter") sendOTP();
+  });
+
+  document.querySelectorAll(".otp-box").forEach((box, idx, all) => {
+    box.addEventListener("input", e => {
+      const val = e.target.value.replace(/\D/g, "").slice(0,1);
+      e.target.value = val;
+      e.target.classList.toggle("filled", !!val);
+      if (val && idx < all.length-1) all[idx+1].focus();
+      checkOTPReady();
+    });
+    box.addEventListener("keydown", e => {
+      if (e.key === "Backspace" && !box.value && idx > 0) {
+        all[idx-1].value = "";
+        all[idx-1].classList.remove("filled");
+        all[idx-1].focus();
+        checkOTPReady();
+      }
+      if (e.key === "Enter" && getOTPValue().length === 6) verifyOTP();
+    });
+    box.addEventListener("paste", e => {
+      const pasted = (e.clipboardData || window.clipboardData).getData("text").replace(/\D/g,"");
+      if (pasted.length >= 6) {
+        e.preventDefault();
+        [...all].forEach((b, i) => {
+          b.value = pasted[i] || "";
+          b.classList.toggle("filled", !!b.value);
+        });
+        all[all.length-1].focus();
+        checkOTPReady();
+      }
+    });
+  });
+
+  function getOTPValue() {
+    return [...document.querySelectorAll(".otp-box")].map(b=>b.value).join("");
+  }
+
+  function clearOTP() {
+    document.querySelectorAll(".otp-box").forEach(b => {
+      b.value=""; b.classList.remove("filled","error","success");
+    });
+    document.getElementById("otp-btn").disabled = true;
+    document.getElementById("otp-msg").className = "auth-msg";
+  }
+
+  function checkOTPReady() {
+    document.getElementById("otp-btn").disabled = getOTPValue().length < 6;
+  }
+
+  // ── Verify OTP ──
+  async function verifyOTP() {
+    const email = document.getElementById("otp-email-display").textContent;
+    const otp   = getOTPValue();
+    const msg   = document.getElementById("otp-msg");
+    if (otp.length < 6) return;
+    setLoading("otp", true);
+    try {
+      const r = await fetch(`${API}/auth/verify-otp`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({email, otp})
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        document.querySelectorAll(".otp-box").forEach(b => b.classList.add("error"));
+        throw new Error(d.detail || "Incorrect code");
+      }
+      // Success
+      document.querySelectorAll(".otp-box").forEach(b => { b.classList.remove("error"); b.classList.add("success"); });
+      setTimeout(() => {
+        showStep("success");
+        document.getElementById("success-email").textContent = email;
+        applyLoggedIn(d.name, email, true);
+        auth.token = d.token;
+      }, 400);
+    } catch (e) {
+      setMsg(msg, "error", e.message);
+    }
+    setLoading("otp", false);
+  }
+
+  async function resendOTP() {
+    const email = document.getElementById("otp-email-display").textContent;
+    clearOTP();
+    await fetch(`${API}/auth/send-otp`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({email})
+    });
+    setMsg(document.getElementById("otp-msg"), "success", "New code sent!");
+    document.querySelector(".otp-box").focus();
+  }
+
+  function backToEmail() { showStep("email"); }
+
+  function continueAsGuest() {
+    closeModal();
+    // Show a brief toast
+    showToast("Continuing as guest 👻");
+  }
+
+  // ── Apply logged-in state ──
+  function applyLoggedIn(name, email, save) {
+    auth.loggedIn = true; auth.name = name; auth.email = email;
+    document.getElementById("login-btn").style.display = "none";
+    const av = document.getElementById("avatar-btn");
+    av.style.display = "flex";
+    document.getElementById("avatar-initial").textContent = (name[0]||"?").toUpperCase();
+    document.getElementById("am-email").textContent = email;
+    if (save) {
+      try { sessionStorage.setItem("seekr_auth", JSON.stringify(auth)); } catch {}
+    }
+  }
+
+  function logout() {
+    auth.loggedIn=false; auth.email=""; auth.name=""; auth.token="";
+    try { sessionStorage.removeItem("seekr_auth"); } catch {}
+    document.getElementById("avatar-btn").style.display="none";
+    document.getElementById("login-btn").style.display="";
+    document.getElementById("avatar-menu").classList.remove("open");
+    showToast("Signed out. See you! 👋");
+  }
+
+  /* ── TOAST ───────────────────────────────────────────────────────── */
+  function showToast(msg) {
+    const t = document.createElement("div");
+    t.style.cssText = "position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--bg-3);border:1px solid var(--border-2);border-radius:999px;padding:.55rem 1.2rem;font-size:.85rem;color:var(--text-2);z-index:2000;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:fadeUp .3s ease both";
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2800);
+  }
+
+  /* ── HELPERS ─────────────────────────────────────────────────────── */
+  function setMsg(el, type, text) {
+    el.textContent = text;
+    el.className = `auth-msg ${type}`;
+  }
+
+  function setLoading(step, on) {
+    const spin = document.getElementById(`${step}-spin`);
+    const text = document.getElementById(`${step}-btn-text`);
+    const btn  = document.getElementById(`${step}-btn`);
+    spin.style.display = on ? "block" : "none";
+    text.style.opacity = on ? "0.5" : "1";
+    btn.disabled = on;
+  }
+
+  function esc(s) {
+    if (!s) return "";
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+
+  document.getElementById("hp-input").focus();
 </script>
 </body>
 </html>
