@@ -333,10 +333,11 @@ def search(query, source="all", page=1, per_page=10):
 
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
-@app.get("/", methods=["GET", "HEAD"])
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     for f in ["index.html", "static/index.html"]:
-        if os.path.exists(f): return FileResponse(f)
+        if os.path.exists(f): 
+            return FileResponse(f)
     return {"message": "Seekr API v3.0"}
 
 @app.get("/search")
