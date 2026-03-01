@@ -1,22 +1,19 @@
 
-# backend.py - Seekr Search Engine Backend v3.2
-# Fixes: Replaced fragile DDG scraping with the duckduckgo-search library.
+# backend.py - Seekr Search Engine Backend v3.3 (Web-Only)
+# Simplified backend to focus on reliable web search.
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-import json, re, os, math, time, hashlib, threading, random, smtplib, secrets
-from collections import defaultdict
+import json, re, os, time, hashlib, threading, random, smtplib, secrets
 from duckduckgo_search import DDGS
-from urllib.parse import urlparse, unquote, parse_qs
+from urllib.parse import urlparse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
-LOCAL_INDEX_FILE = "index.json"
-CACHE_TTL        = 600
-BM25_K1, BM25_B  = 1.5, 0.75
-BOOT_TIME        = time.time()
+CACHE_TTL = 600
+BOOT_TIME = time.time()
 
 STOPWORDS = {
     "is","a","for","the","and","of","to","in","it","this","that","was","are",
@@ -32,7 +29,7 @@ STOPWORDS = {
 }
 
 # ─── APP ─────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Seekr", version="3.2")
+app = FastAPI(title="Seekr", version="3.3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,51 +41,10 @@ app.add_middleware(
 )
 
 # ─── STATE ───────────────────────────────────────────────────────────────────
-state = {
-    "local_index": {}, "local_titles": {}, "local_snippets": {},
-    "doc_lengths": {}, "avg_doc_len": 1.0, "total_docs": 0, "vocab": set(),
-}
 _cache: dict     = {}
 _cache_lock      = threading.Lock()
 _otp_store: dict = {}
 _otp_lock        = threading.Lock()
-
-
-# ─── LOCAL INDEX ─────────────────────────────────────────────────────────────
-def load_local_index():
-    if not os.path.exists(LOCAL_INDEX_FILE):
-        print("[Seekr] No local index found. Local search will be disabled.")
-        return
-    try:
-        with open(LOCAL_INDEX_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        idx = data.get("index", data) if isinstance(data, dict) else data
-        if not isinstance(idx, dict):
-            raise ValueError("Local index is not a valid JSON object.")
-        state["local_index"]    = idx
-        state["local_titles"]   = data.get("titles",   {}) if isinstance(data, dict) else {}
-        state["local_snippets"] = data.get("snippets", {}) if isinstance(data, dict) else {}
-        doc_lens = defaultdict(int)
-        for term, postings in idx.items():
-            for doc, freq in postings.items():
-                doc_lens[doc] += freq
-        state["doc_lengths"] = dict(doc_lens)
-        count = len(doc_lens)
-        state["avg_doc_len"] = sum(doc_lens.values()) / count if count else 1.0
-        state["total_docs"]  = count
-        state["vocab"]       = set(idx.keys())
-        print(f"[Seekr] Local index loaded: {count} docs, {len(idx)} terms.")
-    except Exception as e:
-        print(f"⚠  [Seekr] Error loading local index: {e}")
-        print("     Local search will be disabled.")
-        # Reset state to ensure graceful degradation
-        state["local_index"] = {}
-        state["total_docs"] = 0
-        state["vocab"] = set()
-
-# Load the index at startup, but don't crash if it fails
-load_local_index()
-
 
 # ─── TEXT UTILS ──────────────────────────────────────────────────────────────
 def tokenize(text):
@@ -106,37 +62,6 @@ def highlight(text, tokens, max_len=280):
         snip = re.sub(re.escape(t), lambda m: f"<mark>{m.group()}</mark>", snip, flags=re.IGNORECASE)
     return snip
 
-
-# ─── SPELL CORRECTION ────────────────────────────────────────────────────────
-def _edist(a, b):
-    if abs(len(a)-len(b)) > 3: return 99
-    m, n = len(a), len(b)
-    dp = list(range(n+1))
-    for i in range(1, m+1):
-        prev, dp[0] = dp[0], i
-        for j in range(1, n+1):
-            temp = dp[j]
-            dp[j] = prev if a[i-1]==b[j-1] else 1+min(prev, dp[j], dp[j-1])
-            prev = temp
-    return dp[n]
-
-def spell_correct_query(query):
-    vocab  = state["vocab"]
-    if not vocab: return query, False # No vocab, no correction
-    tokens = re.findall(r"\b[a-z]+\b", query.lower())
-    out, changed = [], False
-    for tok in tokens:
-        if tok in STOPWORDS or tok in vocab:
-            out.append(tok); continue
-        cands = [(v, _edist(tok, v)) for v in vocab if abs(len(tok)-len(v)) <= 2 and _edist(tok, v) <= 1]
-        cands.sort(key=lambda x: x[1])
-        if cands and cands[0][1] == 1:
-            out.append(cands[0][0]); changed = True
-        else:
-            out.append(tok)
-    return " ".join(out), changed
-
-
 # ─── LIVE WEB SEARCH (duckduckgo-search) ───────────────────────────────────
 def fetch_live_results(query, page=1):
     key = hashlib.md5(f"{query.lower()}".encode()).hexdigest()
@@ -150,10 +75,9 @@ def fetch_live_results(query, page=1):
     results = []
     try:
         with DDGS(timeout=20) as ddgs:
-            # Note: max_results is not a guarantee.
             raw_results = ddgs.text(query, safesearch='moderate', max_results=25)
             for r in raw_results:
-                hostname = urlparse(r['href']).hostname if r.get('href') else ''
+                hostname = urlparse(r.get('href')).hostname if r.get('href') else ''
                 results.append({
                     "url": r.get('href'),
                     "title": r.get('title'),
@@ -171,7 +95,6 @@ def fetch_live_results(query, page=1):
 
     return results[:10]
 
-
 # ─── AUTOCOMPLETE ─────────────────────────────────────────────────────────────
 def fetch_suggestions(prefix):
     key = "ac:" + prefix.lower()
@@ -184,92 +107,33 @@ def fetch_suggestions(prefix):
             sug = [r['phrase'] for r in ddgs.suggestions(prefix, max_results=8)]
     except Exception as e:
         print(f"[Seekr] AC failed: {e}")
-        sug = [t for t in sorted(state["vocab"]) if t.startswith(prefix.lower())][:8]
+        sug = [] # No local vocab to fall back on
 
     with _cache_lock:
         _cache[key] = (time.time(), sug)
     return sug[:8]
 
-
-# ─── BM25 ─────────────────────────────────────────────────────────────────────
-def bm25_score(term, doc, postings):
-    N   = max(state["total_docs"], 1)
-    df  = len(postings)
-    idf = math.log((N - df + 0.5) / (df + 0.5) + 1)
-    tf  = postings.get(doc, 0)
-    dl  = state["doc_lengths"].get(doc, state["avg_doc_len"])
-    tfn = (tf*(BM25_K1+1)) / (tf + BM25_K1*(1-BM25_B + BM25_B*dl/state["avg_doc_len"]))
-    return idf * tfn
-
-def search_local(q_tokens):
-    # Gracefully handle missing index
-    if not state.get("local_index"):
-        return []
-        
-    idx = state["local_index"]
-    scores, matched = defaultdict(float), defaultdict(set)
-    for t in q_tokens:
-        for doc in idx.get(t, {}):
-            scores[doc]  += bm25_score(t, doc, idx[t])
-            matched[doc].add(t)
-    results = []
-    for doc, score in sorted(scores.items(), key=lambda x: -x[1]):
-        cov   = len(matched[doc]) / max(len(q_tokens), 1)
-        score *= (0.5 + 0.5 * cov)
-        title   = state["local_titles"].get(doc, os.path.basename(doc))
-        snippet = state["local_snippets"].get(doc, "")
-        if not snippet:
-            try:
-                p = doc if os.path.isabs(doc) else os.path.join(".", doc)
-                if os.path.exists(p):
-                    snippet = open(p, encoding="utf-8", errors="ignore").read()
-            except: pass
-        results.append({
-            "url": f"/doc/{doc}", "display_url": doc, "title": title,
-            "snippet": highlight(snippet, q_tokens) if snippet else f"Local: {os.path.basename(doc)}",
-            "source": "local", "score": round(score, 4), "matched_tokens": list(matched[doc]),
-        })
-    return results
-
-
 # ─── MAIN SEARCH ─────────────────────────────────────────────────────────────
-def do_search(query, source="all", page=1, per_page=10):
+def do_search(query, page=1, per_page=10):
     t0 = time.time()
-    corrected, was_corrected = spell_correct_query(query)
-    effective = corrected if was_corrected else query
-    q_tokens  = tokenize(effective)
+    q_tokens  = tokenize(query)
     results   = []
 
-    if source in ("all", "web"):
-        live = fetch_live_results(effective, page=page)
-        for r in live:
-            toks = tokenize((r.get("title") or "") + " " + (r.get("snippet") or ""))
-            r["matched_tokens"] = list(set(q_tokens) & set(toks)) or q_tokens[:2]
-            r["score"] = 1.0
-            if r.get("snippet") and q_tokens:
-                r["snippet"] = highlight(r["snippet"], q_tokens)
-        results.extend(live)
+    live = fetch_live_results(query, page=page)
+    for r in live:
+        toks = tokenize((r.get("title") or "") + " " + (r.get("snippet") or ""))
+        r["matched_tokens"] = list(set(q_tokens) & set(toks)) or q_tokens[:2]
+        r["score"] = 1.0
+        if r.get("snippet") and q_tokens:
+            r["snippet"] = highlight(r["snippet"], q_tokens)
+    results.extend(live)
 
-    # Make sure to check if local index is available before using it
-    if source in ("all", "local") and state.get("local_index") and q_tokens:
-        seen = {r.get("title", "").lower() for r in results}
-        for r in search_local(q_tokens):
-            if r.get("title", "").lower() not in seen:
-                results.append(r)
-
-    if source == "local":
-        total   = len(results)
-        start   = (page-1)*per_page
-        results = results[start:start+per_page]
-    else:
-        total = len(results) + (10 if len(results) == 10 else 0)
+    total = len(results) + (10 if len(results) == 10 else 0)
 
     return {
         "results": results, "total": total, "page": page, "per_page": per_page,
-        "corrected": corrected if was_corrected else None,
-        "original_query": query, "elapsed": round(time.time()-t0, 4),
+        "corrected": None, "original_query": query, "elapsed": round(time.time()-t0, 4),
     }
-
 
 # ─── ENDPOINTS ───────────────────────────────────────────────────────────────
 @app.get("/wake")
@@ -281,32 +145,21 @@ async def wake():
 async def root():
     for f in ["index.html", "static/index.html"]:
         if os.path.exists(f): return FileResponse(f)
-    return {"message": "Seekr API v3.2"}
+    return {"message": "Seekr API v3.3"}
 
 @app.get("/search")
-async def search_ep(q: str=Query(...), source: str=Query("all"), page: int=Query(1,ge=1), per_page: int=Query(10,ge=1,le=50)):
+async def search_ep(q: str=Query(...), page: int=Query(1,ge=1), per_page: int=Query(10,ge=1,le=50)):
     if not q.strip(): raise HTTPException(400, "Empty query")
-    return do_search(q.strip(), source, page, per_page)
+    return do_search(q.strip(), page, per_page)
 
 @app.get("/suggest")
 async def suggest_ep(q: str=Query(...)):
     return {"suggestions": fetch_suggestions(q.strip())}
 
-@app.get("/spell")
-async def spell_ep(q: str=Query(...)):
-    c, ch = spell_correct_query(q)
-    return {"original": q, "corrected": c, "changed": ch}
-
 @app.get("/stats")
 async def stats_ep():
-    return {"status": "ok", "local_docs": state["total_docs"],
+    return {"status": "ok", "local_docs": 0,
             "cache_size": len(_cache), "uptime_s": round(time.time()-BOOT_TIME)}
-
-@app.post("/reload")
-async def reload_ep():
-    load_local_index()
-    return {"ok": True, "local_docs": state["total_docs"]}
-
 
 # ─── AUTH / OTP ───────────────────────────────────────────────────────────────
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
@@ -320,7 +173,7 @@ def _send_otp_email(to_email, otp):
         print(f"[Seekr Auth] ⚠ No SMTP. OTP for {to_email}: {otp}")
         return True
     try:
-        msg = MIMemultipart("alternative")
+        msg = MIMEMultipart("alternative")
         msg["Subject"] = f"{otp} is your Seekr verification code"
         msg["From"]    = f"Seekr <{SMTP_FROM}>"
         msg["To"]      = to_email

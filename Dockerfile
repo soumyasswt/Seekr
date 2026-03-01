@@ -13,9 +13,6 @@ COPY . .
 # Create docs directory if it doesn't exist
 RUN mkdir -p docs
 
-# Build local index from docs/
-RUN python indexer.py || true
-
 # Expose port
 EXPOSE 8000
 
