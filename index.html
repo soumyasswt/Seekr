@@ -671,6 +671,32 @@
       .hp-headline { font-size:2rem; }
       .rp-body { padding:1rem 1rem 4rem; }
     }
+
+    /* ── WAKE BANNER ────────────────────────────────────────────────── */
+    .wake-banner {
+      position: fixed; bottom: 1.5rem; left: 50%;
+      transform: translateX(-50%) translateY(120%);
+      background: var(--bg-3);
+      border: 1px solid rgba(123,110,246,0.35);
+      border-radius: 999px;
+      padding: 0.6rem 1.25rem;
+      font-size: 0.84rem;
+      color: var(--text-2);
+      z-index: 2000;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      display: flex; align-items: center; gap: 0.6rem;
+      transition: transform 0.4s cubic-bezier(.16,1,.3,1);
+      white-space: nowrap;
+    }
+    .wake-banner.show { transform: translateX(-50%) translateY(0); }
+    .wake-spin {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(123,110,246,0.3);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex-shrink: 0;
+    }
   </style>
 </head>
 <body>
@@ -847,7 +873,31 @@
 
 <script>
   /* ── CONFIG ──────────────────────────────────────────────────────── */
+  /* ── CONFIG ──────────────────────────────────────────────────────── */
   const API = "https://seekr-gpou.onrender.com";
+
+  /* ── FETCH WITH TIMEOUT ──────────────────────────────────────────── */
+  // Render free tier cold-starts take 30-60s. Give it 55s max.
+  async function fetchWithTimeout(url, opts = {}, ms = 55000) {
+    const ctrl = new AbortController();
+    const id   = setTimeout(() => ctrl.abort(), ms);
+    try {
+      const r = await fetch(url, { ...opts, signal: ctrl.signal });
+      clearTimeout(id); return r;
+    } catch (e) { clearTimeout(id); throw e; }
+  }
+
+  /* ── WAKE-UP PING ────────────────────────────────────────────────── */
+  // Ping /wake on page load so Render warms up before the user searches.
+  // Show a subtle banner only if it takes more than 3 seconds.
+  let _backendAlive = false;
+  (async function pingBackend() {
+    const banner = document.getElementById("wake-banner");
+    const timer  = setTimeout(() => { if (!_backendAlive && banner) banner.classList.add("show"); }, 3000);
+    try { await fetchWithTimeout(`${API}/wake`, {}, 60000); _backendAlive = true; } catch {}
+    clearTimeout(timer);
+    if (banner) banner.classList.remove("show");
+  })();
 
   /* ── SEARCH STATE ────────────────────────────────────────────────── */
   const S = {
@@ -957,7 +1007,7 @@
 
   async function fetchAC(prefix) {
     try {
-      const r = await fetch(`${API}/suggest?q=${encodeURIComponent(prefix)}`);
+      const r = await fetchWithTimeout(`${API}/suggest?q=${encodeURIComponent(prefix)}`, {}, 8000);
       renderAC((await r.json()).suggestions || []);
     } catch { closeAC(); }
   }
@@ -1011,14 +1061,26 @@
     renderSkeleton();
     const params = new URLSearchParams({q:S.query, source:S.source, page:S.page, per_page:S.perPage});
     try {
-      const r = await fetch(`${API}/search?${params}`);
-      if (!r.ok) throw r;
+      const r = await fetchWithTimeout(`${API}/search?${params}`, {}, 55000);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       renderResults(await r.json());
-    } catch {
+    } catch (err) {
+      const isTimeout  = err && err.name === "AbortError";
+      const isOffline  = err && (err.message || "").toLowerCase().includes("failed to fetch");
+      const icon       = isTimeout ? "⏳" : "⚡";
+      const title      = isTimeout
+        ? "Seekr is waking up…"
+        : "Could not reach backend";
+      const msg        = isTimeout
+        ? "Render's free tier sleeps after 15 min of inactivity. It usually wakes in 30–60s. <strong>Please wait and try again.</strong>"
+        : "Make sure the backend is running at <code style=\"background:var(--bg-4);padding:2px 6px;border-radius:6px\">seekr-gpou.onrender.com</code>";
       document.getElementById("results-container").innerHTML =
-        `<div class="no-results"><div class="nr-icon">⚡</div>
-         <h3>Backend not connected</h3>
-         <p style="font-size:.85rem">Run <code style="background:var(--bg-4);padding:2px 6px;border-radius:6px">python backend.py</code></p></div>`;
+        `<div class="no-results">
+           <div class="nr-icon">${icon}</div>
+           <h3>${title}</h3>
+           <p style="font-size:.85rem;line-height:1.6">${msg}</p>
+           ${isTimeout ? `<button onclick="runSearch()" style="margin-top:1.2rem;background:linear-gradient(135deg,var(--accent),var(--accent-2));border:none;border-radius:10px;padding:.6rem 1.4rem;color:white;font-family:inherit;font-size:.88rem;font-weight:600;cursor:pointer">Try again →</button>` : ""}
+         </div>`;
       document.getElementById("meta-row").innerHTML = "";
       document.getElementById("pagination").innerHTML = "";
     }
@@ -1154,7 +1216,7 @@
     }
     setLoading("email", true);
     try {
-      const r = await fetch(`${API}/auth/send-otp`, {
+      const r = await fetchWithTimeout(`${API}/auth/send-otp`, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({email})
@@ -1231,7 +1293,7 @@
     if (otp.length < 6) return;
     setLoading("otp", true);
     try {
-      const r = await fetch(`${API}/auth/verify-otp`, {
+      const r = await fetchWithTimeout(`${API}/auth/verify-otp`, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({email, otp})
@@ -1327,5 +1389,11 @@
 
   document.getElementById("hp-input").focus();
 </script>
+
+<!-- ══ WAKE BANNER ══ -->
+<div class="wake-banner" id="wake-banner">
+  <span class="wake-spin"></span>
+  Waking up Seekr on Render… this takes ~30s
+</div>
 </body>
 </html>
