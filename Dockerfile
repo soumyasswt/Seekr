@@ -14,7 +14,7 @@ COPY . .
 RUN mkdir -p docs
 
 # Build local index from docs/
-RUN python indexer.py || true
+RUN python indexer.py
 
 # Expose port
 EXPOSE 8000

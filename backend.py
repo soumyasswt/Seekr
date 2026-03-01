@@ -115,9 +115,9 @@ def spell_correct_query(query):
     for tok in tokens:
         if tok in STOPWORDS or tok in vocab:
             out.append(tok); continue
-        cands = [(v, _edist(tok, v)) for v in vocab if abs(len(tok)-len(v)) <= 2 and _edist(tok, v) <= 2]
+        cands = [(v, _edist(tok, v)) for v in vocab if abs(len(tok)-len(v)) <= 2 and _edist(tok, v) <= 1]
         cands.sort(key=lambda x: x[1])
-        if cands and cands[0][1] > 0:
+        if cands and cands[0][1] == 1:
             out.append(cands[0][0]); changed = True
         else:
             out.append(tok)
@@ -138,7 +138,7 @@ def fetch_live_results(query, page=1):
     try:
         with DDGS(timeout=20) as ddgs:
             # Note: max_results is not a guarantee.
-            raw_results = ddgs.text(query, region='us-en', safesearch='off', max_results=25)
+            raw_results = ddgs.text(query, safesearch='moderate', max_results=25)
             for r in raw_results:
                 hostname = urlparse(r['href']).hostname if r.get('href') else ''
                 results.append({
@@ -302,7 +302,7 @@ def _send_otp_email(to_email, otp):
         print(f"[Seekr Auth] ⚠ No SMTP. OTP for {to_email}: {otp}")
         return True
     try:
-        msg = MIMemultipart("alternative")
+        msg = MIMEMultipart("alternative")
         msg["Subject"] = f"{otp} is your Seekr verification code"
         msg["From"]    = f"Seekr <{SMTP_FROM}>"
         msg["To"]      = to_email
