@@ -16,5 +16,5 @@ RUN mkdir -p docs
 # Expose port
 EXPOSE 8000
 
-# Run the backend server
-CMD ["uvicorn", "backend:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the backend server and test connectivity
+CMD ["/bin/bash", "-c", "uvicorn backend:app --host 0.0.0.0 --port 8000 & sleep 10 && curl -v http://localhost:8000/wake"]
