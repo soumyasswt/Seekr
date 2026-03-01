@@ -138,7 +138,7 @@ def fetch_live_results(query, page=1):
     try:
         with DDGS(timeout=20) as ddgs:
             # Note: max_results is not a guarantee.
-            raw_results = ddgs.text(query, safesearch='off', max_results=25)
+            raw_results = ddgs.text(query, region='us-en', safesearch='off', max_results=25)
             for r in raw_results:
                 hostname = urlparse(r['href']).hostname if r.get('href') else ''
                 results.append({
@@ -302,7 +302,7 @@ def _send_otp_email(to_email, otp):
         print(f"[Seekr Auth] ⚠ No SMTP. OTP for {to_email}: {otp}")
         return True
     try:
-        msg = MIMEMultipart("alternative")
+        msg = MIMemultipart("alternative")
         msg["Subject"] = f"{otp} is your Seekr verification code"
         msg["From"]    = f"Seekr <{SMTP_FROM}>"
         msg["To"]      = to_email
