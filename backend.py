@@ -1,3 +1,4 @@
+
 # backend.py - Seekr Search Engine Backend v3.2
 # Fixes: Replaced fragile DDG scraping with the duckduckgo-search library.
 
@@ -56,25 +57,36 @@ _otp_lock        = threading.Lock()
 # ─── LOCAL INDEX ─────────────────────────────────────────────────────────────
 def load_local_index():
     if not os.path.exists(LOCAL_INDEX_FILE):
-        print("[Seekr] No local index — run: python indexer.py")
+        print("[Seekr] No local index found. Local search will be disabled.")
         return
-    with open(LOCAL_INDEX_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    idx = data.get("index", data) if isinstance(data, dict) else data
-    state["local_index"]    = idx
-    state["local_titles"]   = data.get("titles",   {}) if isinstance(data, dict) else {}
-    state["local_snippets"] = data.get("snippets", {}) if isinstance(data, dict) else {}
-    doc_lens = defaultdict(int)
-    for term, postings in idx.items():
-        for doc, freq in postings.items():
-            doc_lens[doc] += freq
-    state["doc_lengths"] = dict(doc_lens)
-    count = len(doc_lens)
-    state["avg_doc_len"] = sum(doc_lens.values()) / count if count else 1.0
-    state["total_docs"]  = count
-    state["vocab"]       = set(idx.keys())
-    print(f"[Seekr] Local index: {count} docs, {len(idx)} terms.")
+    try:
+        with open(LOCAL_INDEX_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        idx = data.get("index", data) if isinstance(data, dict) else data
+        if not isinstance(idx, dict):
+            raise ValueError("Local index is not a valid JSON object.")
+        state["local_index"]    = idx
+        state["local_titles"]   = data.get("titles",   {}) if isinstance(data, dict) else {}
+        state["local_snippets"] = data.get("snippets", {}) if isinstance(data, dict) else {}
+        doc_lens = defaultdict(int)
+        for term, postings in idx.items():
+            for doc, freq in postings.items():
+                doc_lens[doc] += freq
+        state["doc_lengths"] = dict(doc_lens)
+        count = len(doc_lens)
+        state["avg_doc_len"] = sum(doc_lens.values()) / count if count else 1.0
+        state["total_docs"]  = count
+        state["vocab"]       = set(idx.keys())
+        print(f"[Seekr] Local index loaded: {count} docs, {len(idx)} terms.")
+    except Exception as e:
+        print(f"⚠  [Seekr] Error loading local index: {e}")
+        print("     Local search will be disabled.")
+        # Reset state to ensure graceful degradation
+        state["local_index"] = {}
+        state["total_docs"] = 0
+        state["vocab"] = set()
 
+# Load the index at startup, but don't crash if it fails
 load_local_index()
 
 
@@ -110,6 +122,7 @@ def _edist(a, b):
 
 def spell_correct_query(query):
     vocab  = state["vocab"]
+    if not vocab: return query, False # No vocab, no correction
     tokens = re.findall(r"\b[a-z]+\b", query.lower())
     out, changed = [], False
     for tok in tokens:
@@ -189,6 +202,10 @@ def bm25_score(term, doc, postings):
     return idf * tfn
 
 def search_local(q_tokens):
+    # Gracefully handle missing index
+    if not state.get("local_index"):
+        return []
+        
     idx = state["local_index"]
     scores, matched = defaultdict(float), defaultdict(set)
     for t in q_tokens:
@@ -233,7 +250,8 @@ def do_search(query, source="all", page=1, per_page=10):
                 r["snippet"] = highlight(r["snippet"], q_tokens)
         results.extend(live)
 
-    if source in ("all", "local") and state["local_index"] and q_tokens:
+    # Make sure to check if local index is available before using it
+    if source in ("all", "local") and state.get("local_index") and q_tokens:
         seen = {r.get("title", "").lower() for r in results}
         for r in search_local(q_tokens):
             if r.get("title", "").lower() not in seen:
@@ -302,7 +320,7 @@ def _send_otp_email(to_email, otp):
         print(f"[Seekr Auth] ⚠ No SMTP. OTP for {to_email}: {otp}")
         return True
     try:
-        msg = MIMEMultipart("alternative")
+        msg = MIMemultipart("alternative")
         msg["Subject"] = f"{otp} is your Seekr verification code"
         msg["From"]    = f"Seekr <{SMTP_FROM}>"
         msg["To"]      = to_email
