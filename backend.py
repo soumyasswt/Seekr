@@ -1,12 +1,13 @@
-# backend.py - Seekr Search Engine Backend v3.1
-# Fixes: CORS (no credentials), DDG lite endpoint, /wake for Render cold-start, retries
+# backend.py - Seekr Search Engine Backend v3.2
+# Fixes: Replaced fragile DDG scraping with the duckduckgo-search library.
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import json, re, os, math, time, hashlib, threading, random, smtplib, secrets
 from collections import defaultdict
-import urllib.request, urllib.parse, urllib.error
+from duckduckgo_search import DDGS
+from urllib.parse import urlparse, unquote, parse_qs
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -29,33 +30,9 @@ STOPWORDS = {
     "even","back","still","way","take","come","since","against","much","most"
 }
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
-]
-
-def _headers():
-    return {
-        "User-Agent":      random.choice(USER_AGENTS),
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Encoding": "gzip, deflate",
-        "Connection":      "keep-alive",
-        "DNT":             "1",
-    }
-
 # ─── APP ─────────────────────────────────────────────────────────────────────
-app = FastAPI(title="Seekr", version="3.1")
+app = FastAPI(title="Seekr", version="3.2")
 
-# ━━ CORS FIX ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# The old config had allow_credentials=True + specific origins. That caused
-# browsers to reject the preflight unless every fetch included credentials:'include'.
-# Fix: allow_origins=["*"] + allow_credentials=False.
-# Auth tokens go in JSON bodies (not cookies), so this is completely safe.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -147,111 +124,39 @@ def spell_correct_query(query):
     return " ".join(out), changed
 
 
-# ─── FETCH WITH RETRY ────────────────────────────────────────────────────────
-def _fetch(url, timeout=18):
-    import gzip
-    for attempt in range(3):
-        try:
-            req = urllib.request.Request(url, headers=_headers())
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                raw = resp.read()
-                if "gzip" in resp.info().get("Content-Encoding", ""):
-                    raw = gzip.decompress(raw)
-                return raw.decode("utf-8", errors="replace")
-        except Exception as e:
-            if attempt < 2: time.sleep(1.0 * (attempt + 1))
-            else: print(f"[Seekr] fetch failed {url}: {e}")
-    return ""
-
-
-# ─── DUCKDUCKGO LITE (cloud-IP friendly) ─────────────────────────────────────
-def _extract_ddg_url(href):
-    if not href: return ""
-    for prefix in ["//duckduckgo.com/l/", "/l/?"]:
-        if href.startswith(prefix):
-            full = ("https:" + href) if href.startswith("//") else ("https://duckduckgo.com" + href)
-            try:
-                params = urllib.parse.parse_qs(urllib.parse.urlparse(full).query)
-                return urllib.parse.unquote(params.get("uddg", [href])[0])
-            except: pass
-    return href if href.startswith("http") else ""
-
-
-def _parse_lite(html):
-    results, seen = [], set()
-    title_blocks = re.findall(
-        r'<a[^>]+class="[^"]*result-link[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
-        html, re.DOTALL | re.IGNORECASE)
-    snippets_raw = re.findall(
-        r'class="[^"]*result-snippet[^"]*"[^>]*>(.*?)</(?:td|div|span)',
-        html, re.DOTALL | re.IGNORECASE)
-    display_urls = re.findall(
-        r'class="[^"]*result-url[^"]*"[^>]*>(.*?)</(?:span|td)',
-        html, re.DOTALL | re.IGNORECASE)
-    for i, (href, title_html) in enumerate(title_blocks):
-        url   = _extract_ddg_url(href)
-        title = re.sub(r"<[^>]+>", "", title_html).strip()
-        if not url or not title or url in seen or "duckduckgo.com" in url: continue
-        seen.add(url)
-        snippet = re.sub(r"<[^>]+>", "", snippets_raw[i]).strip() if i < len(snippets_raw) else ""
-        display = re.sub(r"<[^>]+>", "", display_urls[i]).strip() if i < len(display_urls) else url
-        results.append({"url": url, "title": title, "display_url": display, "snippet": snippet, "source": "web"})
-        if len(results) >= 12: break
-    return results
-
-
-def _parse_html_ddg(html):
-    results, seen = [], set()
-    for block in re.split(r'<div[^>]+class="[^"]*result[^"]*"[^>]*>', html)[1:]:
-        m = re.search(r'class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', block, re.DOTALL)
-        if not m: continue
-        url   = _extract_ddg_url(m.group(1))
-        title = re.sub(r"<[^>]+>", "", m.group(2)).strip()
-        if not url or not title or url in seen or "duckduckgo.com/y.js" in url: continue
-        seen.add(url)
-        sm = re.search(r'class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</(?:div|span|a)', block, re.DOTALL)
-        dm = re.search(r'class="[^"]*result__url[^"]*"[^>]*>(.*?)</(?:a|span)', block, re.DOTALL)
-        snippet = re.sub(r"<[^>]+>", "", sm.group(1)).strip() if sm else ""
-        display = re.sub(r"<[^>]+>", "", dm.group(1)).strip() if dm else url
-        results.append({"url": url, "title": title, "display_url": display, "snippet": snippet, "source": "web"})
-        if len(results) >= 12: break
-    return results
-
-
+# ─── LIVE WEB SEARCH (duckduckgo-search) ───────────────────────────────────
 def fetch_live_results(query, page=1):
-    key = hashlib.md5(f"{query.lower()}|{page}".encode()).hexdigest()
+    key = hashlib.md5(f"{query.lower()}".encode()).hexdigest()
     with _cache_lock:
         if key in _cache:
             ts, data = _cache[key]
-            if time.time() - ts < CACHE_TTL: return data
+            if time.time() - ts < CACHE_TTL:
+                start = (page - 1) * 10
+                return data[start:start+10]
 
-    offset  = (page - 1) * 10
     results = []
-
-    # PRIMARY: lite.duckduckgo.com — works on cloud/datacenter IPs
-    html = _fetch("https://lite.duckduckgo.com/lite/?" + urllib.parse.urlencode(
-        {"q": query, "kl": "us-en", "s": str(offset) if offset else "0", "dc": str(offset+1)}
-    ))
-    if html:
-        results = _parse_lite(html)
-        print(f"[Seekr] lite DDG '{query}' p{page} → {len(results)} results")
-
-    # FALLBACK: html.duckduckgo.com
-    if not results:
-        extra = {"b": str(offset)} if offset else {}
-        html = _fetch("https://html.duckduckgo.com/html/?" + urllib.parse.urlencode(
-            {"q": query, "kl": "us-en", "k1": "-1", **extra}
-        ))
-        if html:
-            results = _parse_html_ddg(html)
-            print(f"[Seekr] html DDG '{query}' p{page} → {len(results)} results (fallback)")
-
-    if not results:
-        print(f"[Seekr] ⚠ No DDG results for '{query}' — both endpoints failed")
+    try:
+        with DDGS(timeout=20) as ddgs:
+            # Note: max_results is not a guarantee.
+            raw_results = ddgs.text(query, max_results=25)
+            for r in raw_results:
+                hostname = urlparse(r['href']).hostname if r.get('href') else ''
+                results.append({
+                    "url": r.get('href'),
+                    "title": r.get('title'),
+                    "display_url": hostname,
+                    "snippet": r.get('body'),
+                    "source": "web"
+                })
+        print(f"[Seekr] DDGS search for '{query}' → {len(results)} results")
+    except Exception as e:
+        print(f"[Seekr] ⚠ DDGS search failed for '{query}': {e}")
+        return []
 
     with _cache_lock:
         _cache[key] = (time.time(), results)
-    return results
+
+    return results[:10]
 
 
 # ─── AUTOCOMPLETE ─────────────────────────────────────────────────────────────
@@ -262,11 +167,12 @@ def fetch_suggestions(prefix):
             ts, data = _cache[key]
             if time.time() - ts < 60: return data
     try:
-        raw  = _fetch("https://duckduckgo.com/ac/?" + urllib.parse.urlencode({"q": prefix, "type": "list"}), timeout=5)
-        data = json.loads(raw) if raw else []
-        sug  = data[1] if len(data) > 1 else []
-    except:
+        with DDGS(timeout=5) as ddgs:
+            sug = [r['phrase'] for r in ddgs.suggestions(prefix, max_results=8)]
+    except Exception as e:
+        print(f"[Seekr] AC failed: {e}")
         sug = [t for t in sorted(state["vocab"]) if t.startswith(prefix.lower())][:8]
+
     with _cache_lock:
         _cache[key] = (time.time(), sug)
     return sug[:8]
@@ -338,7 +244,7 @@ def do_search(query, source="all", page=1, per_page=10):
         start   = (page-1)*per_page
         results = results[start:start+per_page]
     else:
-        total = max(len(results), per_page * 5)
+        total = len(results) + (10 if len(results) == 10 else 0)
 
     return {
         "results": results, "total": total, "page": page, "per_page": per_page,
@@ -351,14 +257,13 @@ def do_search(query, source="all", page=1, per_page=10):
 @app.get("/wake")
 @app.head("/wake")
 async def wake():
-    """Lightweight ping so the frontend can warm up Render's cold-start."""
     return {"status": "alive", "uptime_s": round(time.time() - BOOT_TIME)}
 
 @app.get("/")
 async def root():
     for f in ["index.html", "static/index.html"]:
         if os.path.exists(f): return FileResponse(f)
-    return {"message": "Seekr API v3.1"}
+    return {"message": "Seekr API v3.2"}
 
 @app.get("/search")
 async def search_ep(q: str=Query(...), source: str=Query("all"), page: int=Query(1,ge=1), per_page: int=Query(10,ge=1,le=50)):
@@ -401,14 +306,14 @@ def _send_otp_email(to_email, otp):
         msg["Subject"] = f"{otp} is your Seekr verification code"
         msg["From"]    = f"Seekr <{SMTP_FROM}>"
         msg["To"]      = to_email
-        msg.attach(MIMEText(f"""<div style="font-family:'Segoe UI',sans-serif;max-width:480px;margin:0 auto;background:#0e0e10;color:#f0f0f2;border-radius:16px;padding:32px;border:1px solid rgba(255,255,255,0.1)">
+        msg.attach(MIMEText(f'''<div style="font-family:'Segoe UI',sans-serif;max-width:480px;margin:0 auto;background:#0e0e10;color:#f0f0f2;border-radius:16px;padding:32px;border:1px solid rgba(255,255,255,0.1)">
           <div style="font-size:28px;font-weight:700;background:linear-gradient(135deg,#7b6ef6,#5b8df6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px">Seekr</div>
           <p style="color:#a8a8b4;font-size:14px;margin-bottom:28px">Your verification code</p>
           <div style="background:#1e1e22;border:1px solid rgba(123,110,246,0.3);border-radius:12px;padding:24px;text-align:center;margin-bottom:24px">
             <span style="font-size:40px;font-weight:700;letter-spacing:0.15em;color:#f0f0f2">{otp}</span>
           </div>
           <p style="color:#6a6a7a;font-size:13px">Expires in <strong style="color:#a8a8b4">10 minutes</strong>. Don't share it.</p>
-        </div>""", "html"))
+        </div>''', "html"))
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
             s.starttls(); s.login(SMTP_USER, SMTP_PASS)
             s.sendmail(SMTP_FROM, to_email, msg.as_string())

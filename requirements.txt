@@ -1,5 +1,6 @@
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
+duckduckgo-search>=5.3.0
 # No other dependencies — live search uses Python stdlib only (urllib, html.parser)
 # Optional: install these for crawling local websites
 # requests>=2.31.0
